@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 import plotly.graph_objects as go
+from sklearn.preprocessing import MinMaxScaler
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -26,6 +27,23 @@ def load_model():
     except Exception as e:
         st.error(f"❌ Erreur lors du chargement du modèle: {str(e)}")
     return None
+
+@st.cache_resource
+def load_scaler():
+    """Create and fit MinMaxScaler with the exact same parameters as used in training"""
+
+    scaler = MinMaxScaler()
+
+    training_data = pd.DataFrame({
+        'age': [18, 64],  # exact min and max from training data
+        'bmi': [15.96, 53.13],  # exact min and max from training data  
+        'children': [0, 5],  # exact min and max from training data
+        'sex_encoded': [0, 1],  # binary encoding: min=0, max=1
+        'smoker_encoded': [0, 1],  # binary encoding: min=0, max=1
+        'region_encoded': [0, 3]  # 4 categories: min=0, max=3
+    })
+    scaler.fit(training_data)
+    return scaler
 
 def create_radar_chart(age, bmi, children, sex_encoded, smoker_encoded, region_encoded):
     values = [age/100, bmi/50, children/5, sex_encoded, smoker_encoded, region_encoded/3]
@@ -64,7 +82,6 @@ model = load_model()
 if model is not None:
     st.sidebar.markdown('<h2 class="text-2xl font-bold text-pink-600 mb-4">📋 Informations Patient</h2>', unsafe_allow_html=True)
     with st.sidebar:
-        # st.markdown("### 👤 Informations Personnelles")
         age = st.slider("🎂 Âge", 18, 80, 35, help="Âge du patient en années")
         bmi = st.slider("⚖️ Indice de Masse Corporelle (BMI)", 15.0, 50.0, 25.0, 0.1, help="BMI = poids(kg) / taille(m)²")
         children = st.selectbox("👶 Nombre d'enfants", [0,1,2,3,4,5], 0, help="Nombre d'enfants couverts par l'assurance")
@@ -72,10 +89,10 @@ if model is not None:
         st.markdown("### 🏷️ Caractéristiques")
         sex = st.selectbox("👥 Sexe", ["Femme", "Homme"], 0, help="Sexe du patient")
         sex_encoded = 0 if sex == "Femme" else 1
-        smoker = st.selectbox("🚭 Statut fumeur", ["Non-fumeur", "Fumeur"], 0, help="Le patient fume-t-il ?")
-        smoker_encoded = 0 if smoker == "Non-fumeur" else 1
         region = st.selectbox("🗺️ Région", ["Northeast", "Northwest", "Southeast", "Southwest"], 0, help="Région géographique")
         region_encoded = {"Northeast": 0, "Northwest": 1, "Southeast": 2, "Southwest": 3}[region]
+        smoker = st.selectbox("🚭 Statut fumeur", ["Non-fumeur", "Fumeur"], 0, help="Le patient fume-t-il ?")
+        smoker_encoded = 0 if smoker == "Non-fumeur" else 1
         
         st.markdown("---")
         predict_button = st.button("🔮 Prédire le Coût", use_container_width=True)
@@ -83,11 +100,18 @@ if model is not None:
     
     with col1:
         if predict_button:
-            input_data = pd.DataFrame({'age': [age], 'bmi': [bmi], 'children': [children], 
-                                      'sex_encoded': [sex_encoded], 'smoker_encoded': [smoker_encoded], 
-                                      'region_encoded': [region_encoded]})
+            input_data = pd.DataFrame(
+                [[age, bmi, children, sex_encoded, smoker_encoded, region_encoded]],
+                columns=['age', 'bmi', 'children', 'sex_encoded', 'smoker_encoded', 'region_encoded']
+            )
+            
+            scaler = load_scaler()
+            numeric_features = ['age', 'bmi', 'children', 'sex_encoded', 'smoker_encoded', 'region_encoded']
+            input_data_scaled = input_data.copy()
+            input_data_scaled[numeric_features] = scaler.transform(input_data[numeric_features])
+            
             try:
-                prediction = model.predict(input_data)[0]
+                prediction = model.predict(input_data_scaled)[0]
                 st.markdown(f'<div class="bg-gradient-to-br from-indigo-500 to-purple-600 p-8 rounded-2xl text-center text-white my-8 shadow-2xl"><h2 class="text-xl mb-4">💰 Coût Prédit d\'Assurance</h2><h1 class="text-4xl font-bold">${prediction:,.2f}</h1><p class="mt-4 text-sm">Estimation basée sur votre profil</p></div>', unsafe_allow_html=True)
                 st.plotly_chart(create_cost_comparison(prediction), use_container_width=True)
                 st.markdown("### 📊 Analyse Détaillée")
