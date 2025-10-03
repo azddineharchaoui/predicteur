@@ -64,7 +64,7 @@ model = load_model()
 if model is not None:
     st.sidebar.markdown('<h2 class="text-2xl font-bold text-pink-600 mb-4">📋 Informations Patient</h2>', unsafe_allow_html=True)
     with st.sidebar:
-        st.markdown("### 👤 Informations Personnelles")
+        # st.markdown("### 👤 Informations Personnelles")
         age = st.slider("🎂 Âge", 18, 80, 35, help="Âge du patient en années")
         bmi = st.slider("⚖️ Indice de Masse Corporelle (BMI)", 15.0, 50.0, 25.0, 0.1, help="BMI = poids(kg) / taille(m)²")
         children = st.selectbox("👶 Nombre d'enfants", [0,1,2,3,4,5], 0, help="Nombre d'enfants couverts par l'assurance")
